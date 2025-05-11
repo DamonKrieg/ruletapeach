@@ -1,0 +1,7 @@
+cd C:\Users\ulise\Music\ruleta twitch
+git init
+git add .
+git commit -m "Primera versión lista para Vercel"
+git branch -M main
+git remote add origin https://github.com/DamonKrieg/ruletapeach.git
+git push -u origin main

@@ -1,0 +1,14 @@
+{
+  "name": "ruleta-twitch",
+  "version": "1.0.0",
+  "description": "Aplicación de ruleta de sorteos conectada a Twitch",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve ."
+  },
+  "dependencies": {
+    "serve": "^14.2.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

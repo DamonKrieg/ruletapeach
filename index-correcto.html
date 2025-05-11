@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruleta de Twitch - Sorteos y Ganadores</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .wheel-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 0 auto;
+        }
+        
+        .wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            border: 10px solid #4b5563;
+            box-shadow: 0 0 0 10px #9147ff, 0 0 30px rgba(0, 0, 0, 0.5);
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+        }
+        
+        .wheel-center {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: #fff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            border: 8px solid #4b5563;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        
+        .wheel-pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff3333;
+            font-size: 60px;
+            z-index: 5;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        
+        .section {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            transform-origin: 100% 100%;
+            left: 0;
+            top: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        }
+        
+        .login-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .chat-container {
+            max-height: 300px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+        
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: #9147ff;
+            border-radius: 3px;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulse-animation {
+            animation: pulse 1.5s infinite;
+        }
+        
+        .tab-active {
+            border-bottom: 3px solid #9147ff;
+            color: #9147ff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-purple-400 flex items-center">
+                <i class="fab fa-twitch mr-2"></i> Twitch Wheel Picker
+            </h1>
+            <div id="loginStatus" class="flex items-center">
+                <button id="loginBtn" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center">
+                    <i class="fas fa-sign-in-alt mr-2"></i> Iniciar Sesión con Twitch
+                </button>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Wheel Section -->
+            <div class="lg:col-span-2">
+                <div class="bg-gray-800 rounded-xl p-6 shadow-lg">
+                    <!-- Tabs -->
+                    <div class="flex border-b border-gray-700 mb-6">
+                        <button id="topUsersTab" class="tab-active px-4 py-2 mr-2">
+                            <i class="fas fa-trophy mr-2"></i>Top Participantes
+                        </button>
+                        <button id="randomUsersTab" class="px-4 py-2">
+                            <i class="fas fa-random mr-2"></i>Sorteo Aleatorio
+                        </button>
+                    </div>
+                    
+                    <div class="wheel-container mb-8">
+                        <div class="wheel-pointer">
+                            <i class="fas fa-caret-down"></i>
+                        </div>
+                        <div class="wheel" id="wheel">
+                            <!-- Wheel sections will be added dynamically -->
+                        </div>
+                        <div class="wheel-center"></div>
+                    </div>
+                    
+                    <div class="flex justify-center gap-4">
+                        <button id="spinBtn" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-bold text-lg flex items-center disabled:opacity-50" disabled>
+                            <i class="fas fa-redo mr-2"></i> Girar Ruleta
+                        </button>
+                        <button id="analyzeBtn" class="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-bold text-lg flex items-center">
+                            <i class="fas fa-chart-bar mr-2"></i> Analizar Chat
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Info Section -->
+            <div class="lg:col-span-1">
+                <div class="bg-gray-800 rounded-xl p-6 shadow-lg h-full">
+                    <h2 class="text-2xl font-bold mb-6 text-purple-300 flex items-center">
+                        <i class="fas fa-comments mr-2"></i> Estadísticas del Chat
+                    </h2>
+                    
+                    <div class="mb-6">
+                        <label class="block text-gray-300 mb-2">Canal de Twitch</label>
+                        <div class="flex">
+                            <input type="text" id="channelName" class="flex-grow px-4 py-2 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Nombre del canal">
+                            <button id="connectChatBtn" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-r-lg">
+                                <i class="fas fa-plug"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-gray-300" id="listTitle">Top Participantes</h3>
+                        <div class="chat-container bg-gray-700 rounded-lg p-4 mb-4">
+                            <ul id="userList" class="space-y-2">
+                                <li class="text-gray-400 italic">Conéctate a un canal para ver los participantes</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-3 text-gray-300">Ganador Anterior</h3>
+                        <div id="previousWinner" class="text-center py-4">
+                            <p class="text-gray-400 italic">Aún no hay ganadores</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Winner Modal -->
+        <div id="winnerModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-gray-800 rounded-xl p-8 max-w-md w-full relative">
+                <button id="closeWinnerModal" class="absolute top-4 right-4 text-gray-300 hover:text-white">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+                <div class="text-center">
+                    <div class="text-6xl text-yellow-400 mb-4">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <h2 class="text-3xl font-bold text-purple-300 mb-2">¡Tenemos un ganador!</h2>
+                    <p id="winnerName" class="text-2xl font-bold mb-6 pulse-animation">UsuarioEjemplo</p>
+                    <div class="flex justify-center gap-4">
+                        <button id="closeWinnerBtn" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg">
+                            <i class="fas fa-check mr-2"></i> Aceptar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración de Twitch
+        const TWITCH_CLIENT_ID = 'jwbqif3vg83i3zoyp6nm5fu8llq44p'; // Reemplaza con tu Client ID de Twitch
+        const TWITCH_REDIRECT_URI = window.location.href.split('?')[0]; // URL actual sin parámetros
+        const TWITCH_SCOPES = 'chat:read chat:edit'; // Permisos necesarios
+        
+        // Estado de la aplicación
+        const state = {
+            loggedIn: false,
+            channelConnected: false,
+            users: {},
+            activeUsers: [], // Usuarios activos en el chat
+            previousWinners: [],
+            spinning: false,
+            currentChannel: '',
+            mode: 'top', // 'top' o 'random'
+            twitchToken: null,
+            twitchUsername: null
+        };
+
+        // Elementos del DOM
+        const elements = {
+            loginBtn: document.getElementById('loginBtn'),
+            loginStatus: document.getElementById('loginStatus'),
+            spinBtn: document.getElementById('spinBtn'),
+            analyzeBtn: document.getElementById('analyzeBtn'),
+            channelName: document.getElementById('channelName'),
+            connectChatBtn: document.getElementById('connectChatBtn'),
+            userList: document.getElementById('userList'),
+            previousWinner: document.getElementById('previousWinner'),
+            wheel: document.getElementById('wheel'),
+            winnerModal: document.getElementById('winnerModal'),
+            closeWinnerModal: document.getElementById('closeWinnerModal'),
+            closeWinnerBtn: document.getElementById('closeWinnerBtn'),
+            winnerName: document.getElementById('winnerName'),
+            topUsersTab: document.getElementById('topUsersTab'),
+            randomUsersTab: document.getElementById('randomUsersTab'),
+            listTitle: document.getElementById('listTitle')
+        };
+
+        // Colores para las secciones de la ruleta
+        const wheelColors = [
+            'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
+            'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+        ];
+
+        // Event Listeners
+        elements.loginBtn.addEventListener('click', initiateTwitchLogin);
+        elements.spinBtn.addEventListener('click', spinWheel);
+        elements.analyzeBtn.addEventListener('click', analyzeChat);
+        elements.connectChatBtn.addEventListener('click', connectToChat);
+        elements.closeWinnerModal.addEventListener('click', hideWinnerModal);
+        elements.closeWinnerBtn.addEventListener('click', hideWinnerModal);
+        elements.topUsersTab.addEventListener('click', () => switchMode('top'));
+        elements.randomUsersTab.addEventListener('click', () => switchMode('random'));
+
+        // Verificar si hay un token de acceso en la URL (retorno de Twitch OAuth)
+        function checkForAccessToken() {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            
+            const accessToken = params.get('access_token');
+            if (accessToken) {
+                // Limpiar la URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Guardar el token
+                state.twitchToken = accessToken;
+                state.loggedIn = true;
+                
+                // Obtener información del usuario
+                fetchTwitchUserInfo(accessToken);
+            }
+        }
+
+        // Iniciar el flujo de autenticación de Twitch
+        function initiateTwitchLogin() {
+            const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(TWITCH_REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(TWITCH_SCOPES)}`;
+            window.location.href = authUrl;
+        }
+
+        // Obtener información del usuario de Twitch
+        function fetchTwitchUserInfo(accessToken) {
+            fetch('https://api.twitch.tv/helix/users', {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Client-Id': TWITCH_CLIENT_ID
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.data && data.data.length > 0) {
+                    state.twitchUsername = data.data[0].login;
+                    updateLoginStatus(state.twitchUsername);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching user info:', error);
+                alert('Error al obtener información del usuario');
+            });
+        }
+
+        function updateLoginStatus(username) {
+            elements.loginStatus.innerHTML = `
+                <span class="mr-2">Conectado como <span class="text-purple-300">${username}</span></span>
+                <button id="logoutBtn" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm">
+                    <i class="fas fa-sign-out-alt mr-1"></i> Salir
+                </button>
+            `;
+            
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                state.loggedIn = false;
+                state.twitchToken = null;
+                state.twitchUsername = null;
+                state.channelConnected = false;
+                
+                elements.loginStatus.innerHTML = `
+                    <button id="loginBtn" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center">
+                        <i class="fas fa-sign-in-alt mr-2"></i> Iniciar Sesión con Twitch
+                    </button>
+                `;
+                document.getElementById('loginBtn').addEventListener('click', initiateTwitchLogin);
+                
+                updateUI();
+            });
+        }
+
+        function connectToChat() {
+            if (!state.loggedIn) {
+                alert('Por favor inicia sesión primero');
+                return;
+            }
+            
+            const channel = elements.channelName.value.trim().toLowerCase();
+            if (!channel) {
+                alert('Por favor ingresa un nombre de canal');
+                return;
+            }
+            
+            // Simular conexión al chat (en un caso real usarías la API de Twitch)
+            state.channelConnected = true;
+            state.currentChannel = channel;
+            elements.connectChatBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            // Simular recepción de mensajes del chat
+            setTimeout(() => {
+                simulateChatMessages(channel);
+                elements.connectChatBtn.innerHTML = '<i class="fas fa-plug"></i>';
+                elements.connectChatBtn.classList.remove('bg-purple-600');
+                elements.connectChatBtn.classList.add('bg-green-600');
+                updateUI();
+            }, 1500);
+        }
+
+        function simulateChatMessages(channel) {
+            // Resetear usuarios
+            state.users = {};
+            state.activeUsers = [];
+            
+            // Generar usuarios aleatorios con diferentes cantidades de mensajes
+            const userCount = Math.floor(Math.random() * 15) + 10;
+            const popularUsers = Math.min(5, Math.floor(userCount / 3));
+            
+            for (let i = 0; i < userCount; i++) {
+                const username = `Usuario${i+1}`;
+                // Los primeros usuarios son más activos
+                const messageCount = i < popularUsers ? 
+                    Math.floor(Math.random() * 30) + 20 : 
+                    Math.floor(Math.random() * 10) + 1;
+                
+                state.users[username] = messageCount;
+                state.activeUsers.push(username);
+            }
+            
+            // Actualizar lista de usuarios según el modo actual
+            updateUserList();
+            
+            // Habilitar botón de girar
+            elements.spinBtn.disabled = false;
+        }
+
+        function updateUserList() {
+            elements.userList.innerHTML = '';
+            
+            if (state.mode === 'top') {
+                elements.listTitle.textContent = 'Top Participantes';
+                
+                // Ordenar usuarios por cantidad de mensajes
+                const sortedUsers = Object.entries(state.users)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 8); // Mostrar solo los top 8 para la ruleta
+                
+                if (sortedUsers.length === 0) {
+                    elements.userList.innerHTML = '<li class="text-gray-400 italic">No hay participantes aún</li>';
+                    return;
+                }
+                
+                sortedUsers.forEach(([username, count], index) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center';
+                    li.innerHTML = `
+                        <div class="flex items-center">
+                            <span class="w-6 text-center font-bold ${index < 3 ? 'text-yellow-400' : 'text-gray-300'}">${index + 1}</span>
+                            <span class="ml-2 ${index < 3 ? 'font-bold' : ''}">${username}</span>
+                        </div>
+                        <span class="bg-gray-600 px-2 py-1 rounded text-sm">${count} mensajes</span>
+                    `;
+                    elements.userList.appendChild(li);
+                });
+            } else {
+                elements.listTitle.textContent = 'Participantes del Chat';
+                
+                if (state.activeUsers.length === 0) {
+                    elements.userList.innerHTML = '<li class="text-gray-400 italic">No hay participantes en el chat</li>';
+                    return;
+                }
+                
+                // Mostrar todos los usuarios activos en orden aleatorio
+                const shuffledUsers = [...state.activeUsers].sort(() => Math.random() - 0.5);
+                
+                shuffledUsers.forEach((username, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center';
+                    li.innerHTML = `
+                        <div class="flex items-center">
+                            <span class="w-6 text-center font-bold text-gray-300">${index + 1}</span>
+                            <span class="ml-2">${username}</span>
+                        </div>
+                    `;
+                    elements.userList.appendChild(li);
+                });
+            }
+        }
+
+        function analyzeChat() {
+            if (!state.channelConnected) {
+                alert('Por favor conéctate a un canal primero');
+                return;
+            }
+            
+            // Mostrar gráfico de participación
+            const sortedUsers = Object.entries(state.users)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+            
+            const labels = sortedUsers.map(([username]) => username);
+            const data = sortedUsers.map(([_, count]) => count);
+            
+            // Crear gráfico (simplificado)
+            alert(`Análisis del chat:\n\nTop 5 usuarios más activos:\n${labels.map((user, i) => `${i+1}. ${user}: ${data[i]} mensajes`).join('\n')}`);
+        }
+
+        function spinWheel() {
+            if (state.spinning) return;
+            
+            let participants = [];
+            
+            if (state.mode === 'top') {
+                // Obtener los top usuarios (máximo 8 para la ruleta)
+                participants = Object.entries(state.users)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 8)
+                    .map(([username]) => username);
+            } else {
+                // Modo aleatorio - usar todos los usuarios activos (máximo 8)
+                participants = [...state.activeUsers].slice(0, 8);
+            }
+            
+            if (participants.length === 0) {
+                alert('No hay suficientes participantes para girar la ruleta');
+                return;
+            }
+            
+            state.spinning = true;
+            elements.spinBtn.disabled = true;
+            
+            // Crear/actualizar la ruleta
+            createWheel(participants);
+            
+            // Girar la ruleta
+            const wheel = elements.wheel;
+            const spinDuration = 4000; // 4 segundos
+            const spins = 5; // Número de rotaciones completas
+            
+            // Calcular el ángulo final
+            const sectionAngle = 360 / participants.length;
+            let winnerIndex;
+            
+            if (state.mode === 'top') {
+                // En modo "top", ponderar hacia los usuarios con más mensajes
+                const totalMessages = participants.reduce((sum, username) => sum + (state.users[username] || 1), 0);
+                let randomValue = Math.random() * totalMessages;
+                
+                for (let i = 0; i < participants.length; i++) {
+                    randomValue -= state.users[participants[i]] || 1;
+                    if (randomValue <= 0) {
+                        winnerIndex = i;
+                        break;
+                    }
+                }
+            } else {
+                // En modo aleatorio, selección completamente aleatoria
+                winnerIndex = Math.floor(Math.random() * participants.length);
+            }
+            
+            const offsetAngle = 360 - (sectionAngle * winnerIndex);
+            const extraRotation = 360 * spins;
+            const finalAngle = offsetAngle + extraRotation;
+            
+            wheel.style.transform = `rotate(${-finalAngle}deg)`;
+            
+            // Mostrar ganador después de que termine la animación
+            setTimeout(() => {
+                const winner = participants[winnerIndex];
+                state.previousWinners.push(winner);
+                state.spinning = false;
+                
+                // Actualizar ganador anterior
+                updatePreviousWinner();
+                
+                // Mostrar modal de ganador
+                showWinnerModal(winner);
+                
+                // Habilitar botón de girar después de un tiempo
+                setTimeout(() => {
+                    elements.spinBtn.disabled = false;
+                }, 2000);
+            }, spinDuration + 500);
+        }
+
+        function createWheel(participants) {
+            const wheel = elements.wheel;
+            wheel.innerHTML = '';
+            
+            const sectionAngle = 360 / participants.length;
+            
+            participants.forEach((username, index) => {
+                const section = document.createElement('div');
+                section.className = `section ${wheelColors[index % wheelColors.length]}`;
+                section.style.transform = `rotate(${sectionAngle * index}deg) skewY(${90 - sectionAngle}deg)`;
+                section.innerHTML = `
+                    <span style="transform: skewY(${sectionAngle - 90}deg) rotate(${sectionAngle / 2}deg); display: inline-block; width: 80px; text-align: center;">
+                        ${username}
+                    </span>
+                `;
+                wheel.appendChild(section);
+            });
+        }
+
+        function updatePreviousWinner() {
+            if (state.previousWinners.length === 0) {
+                elements.previousWinner.innerHTML = '<p class="text-gray-400 italic">Aún no hay ganadores</p>';
+                return;
+            }
+            
+            const lastWinner = state.previousWinners[state.previousWinners.length - 1];
+            elements.previousWinner.innerHTML = `
+                <div class="flex flex-col items-center">
+                    <div class="text-4xl text-yellow-400 mb-2">
+                        <i class="fas fa-crown"></i>
+                    </div>
+                    <p class="text-xl font-bold">${lastWinner}</p>
+                    ${state.mode === 'top' ? `<p class="text-sm text-gray-400">${state.users[lastWinner]} mensajes</p>` : ''}
+                </div>
+            `;
+        }
+
+        function showWinnerModal(winner) {
+            elements.winnerName.textContent = winner;
+            elements.winnerModal.classList.remove('hidden');
+        }
+
+        function hideWinnerModal() {
+            elements.winnerModal.classList.add('hidden');
+        }
+
+        function switchMode(mode) {
+            if (mode === state.mode) return;
+            
+            state.mode = mode;
+            
+            // Actualizar pestañas activas
+            if (mode === 'top') {
+                elements.topUsersTab.classList.add('tab-active');
+                elements.randomUsersTab.classList.remove('tab-active');
+            } else {
+                elements.topUsersTab.classList.remove('tab-active');
+                elements.randomUsersTab.classList.add('tab-active');
+            }
+            
+            // Actualizar la lista de usuarios
+            if (state.channelConnected) {
+                updateUserList();
+            }
+        }
+
+        function updateUI() {
+            if (state.channelConnected) {
+                elements.channelName.disabled = true;
+            } else {
+                elements.channelName.disabled = false;
+                elements.connectChatBtn.classList.remove('bg-green-600');
+                elements.connectChatBtn.classList.add('bg-purple-600');
+            }
+        }
+
+        // Inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            checkForAccessToken();
+            updateUI();
+        });
+    </script>
+<p style="border-radius: 8px; text-align: center; font-size: 12px; color: #fff; margin-top: 16px;position: fixed; left: 8px; bottom: 8px; z-index: 10; background: rgba(0, 0, 0, 0.8); padding: 4px 8px;">Made with <img src="https://enzostvs-deepsite.hf.space/logo.svg" alt="DeepSite Logo" style="width: 16px; height: 16px; vertical-align: middle;display:inline-block;margin-right:3px;filter:brightness(0) invert(1);"><a href="https://enzostvs-deepsite.hf.space" style="color: #fff;text-decoration: underline;" target="_blank" >DeepSite</a> - 🧬 <a href="https://enzostvs-deepsite.hf.space?remix=damonking/ruleta-de-twitch" style="color: #fff;text-decoration: underline;" target="_blank" >Remix</a></p></body>
+</html>
